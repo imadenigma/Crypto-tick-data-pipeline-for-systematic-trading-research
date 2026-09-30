@@ -1,0 +1,17 @@
+# Fixed BEFORE computing any signal. Any later change = a new trial -> log it.
+venue: futures/um                 # Binance USD-M perpetuals
+
+symbols:
+  primary: BTCUSDT
+  robustness: [ETHUSDT, SOLUSDT]
+
+research:  {start: 2022-01-01, end: 2025-12-31}
+lockbox:   {start: 2026-01-01, end: 2026-08-31}   # final evaluation only
+dev_slice: {start: 2024-08-01, end: 2024-08-31}   # build & debug
+
+scope:
+  - {dataset: aggTrades,   freq: daily,   period: full,      symbols: [BTCUSDT, ETHUSDT, SOLUSDT]}
+  - {dataset: trades,      freq: daily,   period: dev_slice, symbols: [BTCUSDT]}
+  - {dataset: klines,      freq: monthly, period: full,      symbols: [BTCUSDT, ETHUSDT, SOLUSDT], interval: 1m}
+  - {dataset: fundingRate, freq: monthly, period: full,      symbols: [BTCUSDT, ETHUSDT, SOLUSDT]}
+  - {dataset: bookTicker,  freq: daily,   period: full,      symbols: [BTCUSDT]}

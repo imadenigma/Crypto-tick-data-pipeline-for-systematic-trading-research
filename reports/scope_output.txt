@@ -1,0 +1,19 @@
+aggTrades    BTCUSDT  full       1704/1704    31.22 GB    18.3 MB/file  missing=0 no_checksum=0
+    largest research files: 2022-06-13=79.2 MB, 2024-08-05=78.8 MB, 2022-06-15=78.7 MB
+aggTrades    ETHUSDT  full       1704/1704    32.45 GB    19.0 MB/file  missing=0 no_checksum=0
+    largest research files: 2025-02-03=93.8 MB, 2025-10-10=89.9 MB, 2024-08-05=86.5 MB
+aggTrades    SOLUSDT  full       1704/1704    11.63 GB     6.8 MB/file  missing=0 no_checksum=0
+    largest research files: 2024-08-05=67.6 MB, 2022-11-09=62.3 MB, 2022-11-10=61.0 MB
+trades       BTCUSDT  dev_slice    31/31       1.07 GB    34.4 MB/file  missing=0 no_checksum=0
+    largest research files: 2024-08-05=132.8 MB, 2024-08-06=54.6 MB, 2024-08-08=52.2 MB
+klines-1m    BTCUSDT  full         56/56       0.10 GB     1.9 MB/file  missing=0 no_checksum=0
+klines-1m    ETHUSDT  full         56/56       0.11 GB     1.9 MB/file  missing=0 no_checksum=0
+klines-1m    SOLUSDT  full         56/56       0.09 GB     1.6 MB/file  missing=0 no_checksum=0
+fundingRate  BTCUSDT  full         56/56       0.00 GB     0.0 MB/file  missing=0 no_checksum=0
+fundingRate  ETHUSDT  full         56/56       0.00 GB     0.0 MB/file  missing=0 no_checksum=0
+fundingRate  SOLUSDT  full         56/56       0.00 GB     0.0 MB/file  missing=0 no_checksum=0
+bookTicker   BTCUSDT  full        320/1704    52.58 GB   164.3 MB/file  missing=1384 no_checksum=0
+    missing: ['2022-01-01', '2022-01-02', '2022-01-03', '2022-01-04'] ... (last: 2026-08-31)
+    largest research files: 2024-02-29=474.1 MB, 2024-02-28=433.8 MB, 2024-03-04=432.5 MB
+
+zipped total 129.2 GB | budget x2 258.5 GB | free at /home/imad/PycharmProjects/orderflow/data: 835.8 GB
