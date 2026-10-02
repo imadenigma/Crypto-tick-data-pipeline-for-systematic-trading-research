@@ -4,7 +4,7 @@ import argparse
 
 from orderflow.config import DEFAULT_CONFIG, load_config
 from orderflow.data.catalog import DatasetSpec, list_files
-from scripts.download import RAW_ROOT, download_many
+from orderflow.data.download import RAW_ROOT, download_many
 
 
 def main():
