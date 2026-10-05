@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from orderflow.data.validate import RECON_KEYS, reconcile_klines, reconcile_trade
+from orderflow.data.validate import RECON_KEYS, reconcile_klines, reconcile_trade, flag_bad_prints
 
 T0 = 1_722_470_400_000_000   # 2024-08-01 00:00:00 UTC, in microseconds
 MIN = 60_000_000
@@ -115,3 +115,28 @@ def test_reconcile_klines_inputs_untouched():
     reconcile_klines(agg, k)
     pd.testing.assert_frame_equal(agg, agg_before)
     pd.testing.assert_frame_equal(k, k_before)
+
+
+# --------- flag bad prints ----------
+
+def _quiet(n = 1000, seed = 0):
+    rng = np.random.default_rng(seed)
+    return 60000.0 + rng.integers(0,2, n) * 0.1
+
+def _flags(p, **kw):
+    return flag_bad_prints(pd.DataFrame({"agg_id": np.arange(len(p)), "price": p}), "BTCUSDT", **kw)
+
+def test_bad_prints_spike_vs_real_move():
+    spike, step = _quiet(), _quiet()
+    spike[700] *= 1.02          # one isolated +2% print
+    step[700:] *= 1.02          # a real, permanent +2% move
+    assert np.flatnonzero(_flags(spike).bad_print).tolist() == [700]
+    assert np.flatnonzero(_flags(step).bad_print).tolist() == list(range(700, 800))   # N/2 swamping
+
+
+def test_bad_prints_are_causal():
+    p = _quiet()
+    p[700] *= 1.02
+    q = p.copy()
+    q[800:] *= 1.05             # rewrite the future from trade 800 on
+    pd.testing.assert_frame_equal(_flags(p).iloc[:800], _flags(q).iloc[:800])

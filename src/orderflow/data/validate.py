@@ -116,3 +116,27 @@ def reconcile_klines(agg: pd.DataFrame, klines: pd.DataFrame) -> pd.DataFrame:
     res["missing_kline"] = missing
     res.index.name = "open_time"
     return res
+
+def flag_bad_prints(agg: pd.DataFrame, symbol: str, window: int = 200, k : float = 10.0, min_dev_bp: float = 10.0):
+    if not agg.agg_id.is_monotonic_increasing:
+        raise ValueError("sort by agg_id first: trade order is defined by the id, not the timestamp")
+    price = agg.price.to_numpy()
+    lp = pd.Series(np.log(price))
+    ref = lp.rolling(window=window, min_periods=window).median().shift(1)
+    resid = lp - ref
+    mad = resid.abs().rolling(window, min_periods=window).median().shift(1)
+    scale = np.maximum(1.4826 * mad.to_numpy(), TICK[symbol] / price) #bp
+    z = np.abs(resid.to_numpy()) / scale
+    dev_bp = resid.to_numpy() * 1e4
+    bad = (z > k) & (np.abs(dev_bp) > min_dev_bp)
+    return pd.DataFrame({"dev_bp": dev_bp, "z": z, "bad_prints" : bad}, index=agg.index)
+
+def summarize_flags(flags: pd.DataFrame) -> dict:
+    scored = flags.z.notna()
+    return {
+        "bp_scored": int(scored.sum()),
+        "bp_unscored": int((~scored).sum()),
+        "bp_flagged": int(flags.bad_print.sum()),
+        "bp_max_abs_dev": float(flags.dev_bp.abs().max()),
+        "bp_max_z": float(flags.z.max()),
+    }
