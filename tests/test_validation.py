@@ -48,7 +48,7 @@ def _klines():
 # ---------- reconcile_trades ----------
 
 def test_reconcile_trades_clean():
-    r = reconcile_trade(_agg(), _trades())
+    r =     reconcile_trade(_agg(), _trades())
     assert r["agg_rows"] == 3 and r["trade_rows"] == 5
     assert all(r[k] == 0 for k in RECON_KEYS), r
 
@@ -130,8 +130,8 @@ def test_bad_prints_spike_vs_real_move():
     spike, step = _quiet(), _quiet()
     spike[700] *= 1.02          # one isolated +2% print
     step[700:] *= 1.02          # a real, permanent +2% move
-    assert np.flatnonzero(_flags(spike).bad_print).tolist() == [700]
-    assert np.flatnonzero(_flags(step).bad_print).tolist() == list(range(700, 800))   # N/2 swamping
+    assert np.flatnonzero(_flags(spike).bad_prints).tolist() == [700]
+    assert np.flatnonzero(_flags(step).bad_prints).tolist() == list(range(700, 800))   # N/2 swamping
 
 
 def test_bad_prints_are_causal():
@@ -140,3 +140,21 @@ def test_bad_prints_are_causal():
     q = p.copy()
     q[800:] *= 1.05             # rewrite the future from trade 800 on
     pd.testing.assert_frame_equal(_flags(p).iloc[:800], _flags(q).iloc[:800])
+
+def test_bad_prints_need_both_conditions():
+    p = _quiet()
+    p[700] *= 1.0005  # +5 bp: statistically huge in a quiet market but economically small
+    f = _flags(p)
+    assert f.z[700] > 10 and not f.bad_prints[700]
+    assert _flags(p, min_dev_bp = 1.0).bad_prints[700]
+
+def test_bad_prints_warmup_unsorted_untouched():
+    df = pd.DataFrame({"agg_id": np.arange(1000), "price": _quiet()})
+    before = df.copy()
+    f = flag_bad_prints(df, "BTCUSDT")
+    assert f.z.iloc[:400].isna().all() and not f.bad_prints.iloc[:400].any()
+    pd.testing.assert_frame_equal(df, before)
+    with pytest.raises(ValueError):
+        flag_bad_prints(df.iloc[::-1], "BTCUSDT")
+
+

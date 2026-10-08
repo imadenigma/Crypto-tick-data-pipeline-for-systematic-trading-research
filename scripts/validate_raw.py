@@ -8,7 +8,7 @@ from tqdm import tqdm
 from orderflow.config import DEFAULT_CONFIG, REPO_ROOT, load_config
 from orderflow.data.catalog import DatasetSpec
 from orderflow.data.load import raw_zip, read_zip
-from validate import check_aggtrades
+from orderflow.data.validate import check_aggtrades
 
 OUT = REPO_ROOT / "reports" / "data_quality"
 ISSUES = ["unsorted_ids", "dup_ids", "conflicting_dups", "agg_id_jumps", "chain_breaks",
@@ -40,6 +40,7 @@ def main() -> None:
 
     rep = pd.DataFrame(reports)
     gap = pd.concat(gaps, ignore_index=True)
+
     OUT.mkdir(parents=True, exist_ok=True)
     stem = f"aggTrades_{symbol}_{args.period}"
     rep.to_csv(OUT / f"{stem}_days.csv", index=False)

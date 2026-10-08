@@ -16,16 +16,16 @@ def off_grid(x: np.ndarray, step: float) :
     k = x / step
     return int((np.abs(k - np.round(k)) > 1e-6).sum())
 
-def check_aggtrades(df: pd.DataFrame, day: date, symbol: str, min_gap_s: float = 10.0) -> tuple[dict, pd.DataFrame]:
+def check_aggtrades(df: pd.DataFrame, day: date, symbol: str, min_gap_s: float = 10.0) -> tuple[dict, pd.DataFrame]:  # pyright: ignore[reportMissingTypeArgument]
 
     start, end = day_bounds_us(day)
     r = {"day" : day.isoformat(), "rows": len(df)}
     r["unsorted_ids"] = int((np.diff(df.agg_id.to_numpy()) <= 0).sum())
     r["dup_ids"] = int(df.agg_id.duplicated().sum())
-    r["conflicating_dups"] = int(df.drop_duplicates().agg_id.duplicated().sum())
+    r["conflicting_dups"] = int(df.drop_duplicates().agg_id.duplicated().sum())
 
     s = df.drop_duplicates().sort_values("agg_id", kind="stable")
-    agg, first, last, ts = (s[c].tonumpy() for c in ("agg_id", "first_id", "last_id", "ts"))
+    agg, first, last, ts = (s[c].to_numpy() for c in ("agg_id", "first_id", "last_id", "ts"))
     hole = first[1:] - last[:-1] - 1
     r["agg_id_jumps"] = int((np.diff(agg) != 1).sum())
     r["chain_breaks"] = int((hole != 0).sum())
