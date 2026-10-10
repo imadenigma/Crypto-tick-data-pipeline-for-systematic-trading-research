@@ -7,14 +7,20 @@ import pandas as pd
 
 TICK = {"BTCUSDT": 0.1}
 STEP = {"BTCUSDT": 0.001}
+MAX_OFF_TICK_SHARE = 0.10
+
 
 def day_bounds_us(day:date) -> tuple[int, int]:
     start = int(datetime(day.year, day.month, day.day, tzinfo=timezone.utc).timestamp() * 1e6)
     return start, start + 86400 * 1_000_000
 
-def off_grid(x: np.ndarray, step: float) :
+def off_grid_mask(x: np.ndarray, step: float) -> np.ndarray:
     k = x / step
-    return int((np.abs(k - np.round(k)) > 1e-6).sum())
+    return np.abs(k - np.round(k)) > 1e-6
+
+
+def off_grid(x: np.ndarray, step: float) -> int:
+    return int(off_grid_mask(x, step).sum())
 
 def check_aggtrades(df: pd.DataFrame, day: date, symbol: str, min_gap_s: float = 10.0) -> tuple[dict, pd.DataFrame]:  # pyright: ignore[reportMissingTypeArgument]
 
@@ -140,3 +146,45 @@ def summarize_flags(flags: pd.DataFrame) -> dict:
         "bp_max_abs_dev": float(flags.dev_bp.abs().max()),
         "bp_max_z": float(flags.z.max()),
     }
+
+
+class CleaningError(RuntimeError):
+    """Data is too corrupted to be cleaned automatically."""
+
+def clean_aggtrades(df: pd.DataFrame, symbol: str, tail: pd.DataFrame | None = None, window: int = 200) -> tuple[pd.DataFrame, dict]:
+    rows_in = len(df)
+    s = df.drop_duplicates()
+    dropped = rows_in - len(s)
+    if s.agg_id.duplicated().any():
+        raise CleaningError(f"{dropped} duplicate rows dropped, but still {s.agg_id.duplicated().sum()} duplicate agg_ids remain")
+    s = s.sort_values("agg_id", kind="stable").reset_index(drop=True)
+    if ((s.price <= 0) | (s.qty <= 0)).any() or (s.first_id > s.last_id).any():
+        raise CleaningError("non-positive price or quantity, or first_id > last_id")
+    off_tick = off_grid_mask(s.price.to_numpy(), TICK[symbol])
+    off_q = off_grid(s.qty.to_numpy(), STEP[symbol])
+    if off_q or off_tick.mean() > MAX_OFF_TICK_SHARE:
+        raise CleaningError(
+            f"{int(off_tick.sum()):,} of {len(s):,} prices off the {TICK[symbol]} tick, "
+            f"{off_q:,} quantities off the {STEP[symbol]} step: contract spec change?"
+        )
+    n_tail = 0 if tail is None else len(tail)
+    ext = s if not tail else pd.concat([tail[list(df.columns)], s],  ignore_index=True)
+    ext["hole_before"] = (ext.first_id - ext.last_id.shift(1) - 1).fillna(0).astype("int64")
+    ext["gap_s"] = (ext.ts.diff() / 1e6).fillna(0.0)
+    if (ext.hole_before.iloc[n_tail:] < 0).any():
+        raise CleaningError("overlapping id ranges between consecutive aggTrades")
+    ext = ext.join(flag_bad_prints(ext, symbol, window))
+    out = ext.iloc[n_tail:].reset_index(drop=True)
+    out["off_tick"] = off_tick
+    stats = {
+        "rows_in": rows_in,
+        "rows_out": len(out),
+        "dropped_exact_dups": dropped,
+        "id_gaps": int((out.hole_before > 0).sum()),
+        "missing_fills" : int(out.hole_before.sum()),
+        "max_gap_s": float(out.gap_s.max()), "flagged": int(out.bad_prints.sum()),
+        "unscored": int(out.z.isna().sum()), "off_tick": int(off_tick.sum())
+    }
+    if stats["rows_in"] != stats["rows_out"] + stats["dropped_exact_dups"]:
+        raise CleaningError(f"accounting identity broken: {stats}")
+    return out, stats

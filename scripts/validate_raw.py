@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import Counter
 
 import argparse
 
@@ -16,6 +17,27 @@ ISSUES = ["unsorted_ids", "dup_ids", "conflicting_dups", "agg_id_jumps", "chain_
           "off_tick", "off_step", "cross_day_hole"]
 
 
+
+def diagnose_chain_breaks(agg: pd.DataFrame) -> dict:
+    ordered = agg.sort_values("agg_id", kind="stable")
+    previous_last = ordered["last_id"].to_numpy()[:-1]
+    following_first = ordered["first_id"].to_numpy()[1:]
+    gaps = pd.Series(following_first - previous_last - 1)
+    holes = gaps[gaps > 0]
+    overlaps = gaps[gaps < 0]
+    distribution = holes.value_counts().sort_index()
+    distribution.index.name = "skipped_ids_per_break"
+    distribution.name = "break_count"
+    return {
+        "chain_breaks": int(gaps.ne(0).sum()),
+        "forward_holes": int(holes.size),
+        "overlaps_or_reversals": int(overlaps.size),
+        "skipped_ids": int(holes.sum()),
+        "largest_hole": int(holes.max()) if not holes.empty else 0,
+        "hole_distribution": distribution,
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--period", default="dev_slice")
@@ -29,8 +51,15 @@ def main() -> None:
     spec = DatasetSpec("aggTrades", "daily")
     reports, gaps, prev_last = [], [], None
 
+    chain_reports = []
+    hole_counts = Counter()
     for day in tqdm(cfg.period(args.period).days(), unit="day"):
         df = read_zip(raw_zip(spec, cfg.venue, symbol, day.isoformat()), "aggTrades")
+        chain = diagnose_chain_breaks(df)
+        distribution = chain.pop("hole_distribution")
+        hole_counts.update(distribution.to_dict())
+        chain["day"] = day.isoformat()
+        chain_reports.append(chain)
         r, g = check_aggtrades(df, day, symbol, args.min_gap_s)
         # Continuity across files: the first fill of today must follow the last fill of yesterday
         r["cross_day_hole"] = 0 if prev_last is None else int(df.first_id.min() - prev_last - 1)
@@ -38,6 +67,17 @@ def main() -> None:
         reports.append(r)
         gaps.append(g)
 
+    chain_summary = pd.DataFrame(chain_reports)
+    total_columns = ["chain_breaks", "forward_holes", "overlaps_or_reversals", "skipped_ids"]
+    print("\nWithin-day raw ID connections:")
+    print(chain_summary[total_columns].sum().to_string())
+    print("largest hole:", int(chain_summary["largest_hole"].max()))
+
+    distribution = pd.Series(hole_counts, dtype = "int64").sort_index()
+    distribution.index.name = "skipped_ids_per_break"
+    distribution.name = "break_count"
+    print("\nForward-hole size distribution:")
+    print(distribution.to_string())
     rep = pd.DataFrame(reports)
     gap = pd.concat(gaps, ignore_index=True)
 
