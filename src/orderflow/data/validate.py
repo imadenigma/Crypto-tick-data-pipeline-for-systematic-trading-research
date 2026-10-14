@@ -147,6 +147,21 @@ def summarize_flags(flags: pd.DataFrame) -> dict:
         "bp_max_z": float(flags.z.max()),
     }
 
+class CleaningError(RuntimeError):
+    "A data problem that needs a human decision"
+
+def clean_aggTrades(df: pd.DataFrame, symbol: str, tail : pd.DataFrame | None = None, window: int = 200):
+    rows_in = len(df)
+    s = df.drop_duplicates()
+    dropped = rows_in - len(s)
+    if s.agg_id.duplicated().any():
+        raise CleaningError(f"{int(s.agg_id.duplicated().sum())} agg_ids repeat with different contents")
+    s = s.sort_values("agg_id", kind="stable")
+    if ((s.price <= 0) | (s.qty <= 0)).any() or (s.first_id > s.last_id).any():
+        raise CleaningError("non-positive price or quantity, or first_id > last_id")
+    if off_grid(s.price.to_numpy(), TICK[symbol]) or off_grid(s.qty.to_numpy(), STEP[symbol]):
+        raise CleaningError("price or quantity off the exchange grid: contract spec change?")
+
 
 class CleaningError(RuntimeError):
     """Data is too corrupted to be cleaned automatically."""
