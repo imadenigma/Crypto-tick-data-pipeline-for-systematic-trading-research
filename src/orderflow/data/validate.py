@@ -183,7 +183,7 @@ def clean_aggtrades(df: pd.DataFrame, symbol: str, tail: pd.DataFrame | None = N
             f"{off_q:,} quantities off the {STEP[symbol]} step: contract spec change?"
         )
     n_tail = 0 if tail is None else len(tail)
-    ext = s if not tail else pd.concat([tail[list(df.columns)], s],  ignore_index=True)
+    ext = s if tail is None else pd.concat([tail[list(df.columns)], s],  ignore_index=True)
     ext["hole_before"] = (ext.first_id - ext.last_id.shift(1) - 1).fillna(0).astype("int64")
     ext["gap_s"] = (ext.ts.diff() / 1e6).fillna(0.0)
     if (ext.hole_before.iloc[n_tail:] < 0).any():
