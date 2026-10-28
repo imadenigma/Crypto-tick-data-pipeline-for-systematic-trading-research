@@ -9,7 +9,7 @@ from tqdm import tqdm
 from orderflow.config import DEFAULT_CONFIG, REPO_ROOT, load_config
 from orderflow.data.catalog import DatasetSpec
 from orderflow.data.load import raw_zip, read_zip
-from orderflow.data.validate import check_aggtrades, STRUCTURAL_ISSUES
+from orderflow.data.validate import check_aggtrades, STRUCTURAL_ISSUES, OUTAGE_GAP_S
 
 OUT = REPO_ROOT / "reports" / "data_quality"
 ISSUES = ISSUES = STRUCTURAL_ISSUES + ["cross_day_hole"]
@@ -40,7 +40,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--period", default="dev_slice")
     ap.add_argument("--symbol", default=None)
-    ap.add_argument("--min-gap-s", type=float, default=10.0)
+    ap.add_argument("--min-gap-s", type=float, default=OUTAGE_GAP_S)
     ap.add_argument("--config", default=DEFAULT_CONFIG)
     args = ap.parse_args()
 

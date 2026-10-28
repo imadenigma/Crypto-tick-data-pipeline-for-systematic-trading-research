@@ -66,7 +66,7 @@ def check_aggtrades(df: pd.DataFrame, day: date, symbol: str, min_gap_s: float =
 RECON_KEYS = ["uncovered_trades", "empty_aggs", "qty_mismatch", "price_mismatch", "ts_mismatch", "side_mismatch"]
 MINUTE_US = 60 * 1_000_000
 AGG_WINDOW_US = 100_000
-
+OUTAGE_GAP_S = 30.0   # a silence longer than this is an outage, not quiet trading (T000i)
 STRUCTURAL_ISSUES = ["unsorted_ids", "dup_ids", "conflicting_dups", "agg_id_jumps", "chain_breaks",
                      "missing_fills", "bad_ranges", "ts_backwards", "out_of_day", "nonpositive",
                      "off_tick", "off_step"]
