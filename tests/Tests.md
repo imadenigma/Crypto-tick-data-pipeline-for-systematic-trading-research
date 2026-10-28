@@ -12,6 +12,7 @@ On real data there is no "right answer" for which trades should be flagged.
 | parameter logic | each condition really controls the decision | +5 bp: z ≈ 200 but not flagged; flagged with `min_dev_bp=1` |
 | boundary | exact edges, where off-by-ones live | warm-up exactly 2N = 400; unsorted input raises |
 | contract | function has no side effects | input DataFrame unchanged |
+| 2026-10-28 | T000i | Outage threshold from dev-slice silence distribution (47.8M inter-trade gaps): p99 0.64 s, p99.9 1.33 s, p99.99 2.22 s, p99.999 3.31 s, max 7.64 s; 24 silences > 5 s, none > 10 s; smooth tail, longest silences on weekend evenings, no isolated outliers. Rule fixed before looking: T = first of 10/15/30/60 s that is at least 3 x the tail end. Decision: outage = silence > 30 s (none in the dev slice). To recheck on the full research period. Also: median gap 0 s, most consecutive aggTrades share a millisecond (sweeps across price levels). | dev_slice | — | — |
 
 ```
 causality:  ∀t,  p_{>t} changes  ⇒  outputs_{<t} unchanged

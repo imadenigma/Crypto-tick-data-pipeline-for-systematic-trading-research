@@ -155,10 +155,24 @@ def summarize_flags(flags: pd.DataFrame) -> dict:
     return {
         "bp_scored": int(scored.sum()),
         "bp_unscored": int((~scored).sum()),
-        "bp_flagged": int(flags.bad_print.sum()),
+        "bp_flagged": int(flags.bad_prints.sum()),
         "bp_max_abs_dev": float(flags.dev_bp.abs().max()),
         "bp_max_z": float(flags.z.max()),
     }
+
+def flag_episodes(agg: pd.DataFrame, flags: pd.DataFrame, gap: int = 200) -> pd.DataFrame:
+    f = agg.loc[flags.bad_prints, ["agg_id", "ts"]].join(flags.loc[flags.bad_prints, ["dev_bp", "z"]])
+    f = f.assign(abs_dev=f.dev_bp.abs())
+    episode = (f.agg_id.diff() > gap).cumsum()
+    out = f.groupby(episode).agg(
+        start_us=("ts", "first"), end_us=("ts", "last"),
+        first_agg_id=("agg_id", "first"), last_agg_id=("agg_id", "last"),
+        n_flags=("agg_id", "size"), mean_dev_bp=("dev_bp", "mean"),
+        max_abs_dev_bp=("abs_dev", "max"), max_z=("z", "max"),
+    )
+    out["span_trades"] = out.last_agg_id - out.first_agg_id + 1
+    out["side"] = np.sign(out.mean_dev_bp).astype(int)      # -1 down-wick, +1 up-wick
+    return out.reset_index(drop=True)
 
 class CleaningError(RuntimeError):
     "A data problem that needs a human decision"
