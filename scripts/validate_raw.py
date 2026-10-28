@@ -9,12 +9,10 @@ from tqdm import tqdm
 from orderflow.config import DEFAULT_CONFIG, REPO_ROOT, load_config
 from orderflow.data.catalog import DatasetSpec
 from orderflow.data.load import raw_zip, read_zip
-from orderflow.data.validate import check_aggtrades
+from orderflow.data.validate import check_aggtrades, STRUCTURAL_ISSUES
 
 OUT = REPO_ROOT / "reports" / "data_quality"
-ISSUES = ["unsorted_ids", "dup_ids", "conflicting_dups", "agg_id_jumps", "chain_breaks",
-          "missing_fills", "bad_ranges", "ts_backwards", "out_of_day", "nonpositive",
-          "off_tick", "off_step", "cross_day_hole"]
+ISSUES = ISSUES = STRUCTURAL_ISSUES + ["cross_day_hole"]
 
 
 

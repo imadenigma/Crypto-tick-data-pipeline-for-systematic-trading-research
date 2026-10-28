@@ -65,6 +65,11 @@ def check_aggtrades(df: pd.DataFrame, day: date, symbol: str, min_gap_s: float =
 
 RECON_KEYS = ["uncovered_trades", "empty_aggs", "qty_mismatch", "price_mismatch", "ts_mismatch", "side_mismatch"]
 MINUTE_US = 60 * 1_000_000
+AGG_WINDOW_US = 100_000
+
+STRUCTURAL_ISSUES = ["unsorted_ids", "dup_ids", "conflicting_dups", "agg_id_jumps", "chain_breaks",
+                     "missing_fills", "bad_ranges", "ts_backwards", "out_of_day", "nonpositive",
+                     "off_tick", "off_step"]
 
 def reconcile_trade(agg:pd.DataFrame, trades: pd.DataFrame) -> dict:
     a = agg.sort_values("first_id", kind="stable").reset_index(drop=True)
@@ -75,12 +80,18 @@ def reconcile_trade(agg:pd.DataFrame, trades: pd.DataFrame) -> dict:
     covered = (pos >= 0) & (t.id.to_numpy() <= a.last_id.to_numpy()[safe])
     t = t[covered].assign(pos=pos[covered])
     g = t.groupby("pos").agg(
-        qty = ("qty", "sum"),
-        pmin = ("price", "min"), pmax = ("price", "max"),
-        tmin = ("ts", "min"), tmax = ("ts", "max"),
-        smin = ("is_buyer_maker", "min"), smax = ("is_buyer_maker", "max")
+        n=("id", "size"),
+        qty=("qty", "sum"),
+        pmin=("price", "min"),
+        pmax=("price", "max"),
+        tmin=("ts", "min"),
+        tmax=("ts", "max"),
+        smin=("is_buyer_maker", "min"),
+        smax=("is_buyer_maker", "max"),
     )
     m = a.loc[g.index]
+    span = (m.last_id - m.first_id + 1).to_numpy()
+
     return {
         "agg_rows": len(agg),
         "trade_rows": len(trades),
@@ -88,10 +99,12 @@ def reconcile_trade(agg:pd.DataFrame, trades: pd.DataFrame) -> dict:
         "empty_aggs": int(len(a) - len(g)),
         "qty_mismatch": int((~np.isclose(g.qty, m.qty, rtol=0, atol=1e-9)).sum()),
         "price_mismatch": int(((g.pmin != m.price) | (g.pmax != m.price)).sum()),
-        "ts_mismatch": int(((g.tmin != m.ts) | (g.tmax != m.ts)).sum()),
+        "ts_mismatch": int(((g.tmin < m.ts) | (g.tmax > m.ts + AGG_WINDOW_US)).sum()),
         "side_mismatch": int(
             ((g.smin != m.is_buyer_maker) | (g.smax != m.is_buyer_maker)).sum()
-        )
+        ),
+        "aggs_with_inner_gaps": int((span > g.n.to_numpy()).sum()),
+        "inner_missing_ids": int((span - g.n.to_numpy()).sum()),
     }
 
 def reconcile_klines(agg: pd.DataFrame, klines: pd.DataFrame) -> pd.DataFrame:

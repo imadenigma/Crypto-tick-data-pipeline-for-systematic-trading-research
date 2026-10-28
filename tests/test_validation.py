@@ -1,8 +1,11 @@
+from datetime import date
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from orderflow.data.validate import RECON_KEYS, reconcile_klines, reconcile_trade, flag_bad_prints
+from orderflow.data.validate import (RECON_KEYS, STRUCTURAL_ISSUES, check_aggtrades, flag_bad_prints,
+                                     reconcile_klines, reconcile_trade)
 
 T0 = 1_722_470_400_000_000   # 2024-08-01 00:00:00 UTC, in microseconds
 MIN = 60_000_000
@@ -58,7 +61,7 @@ FAULTS = [
     ("aggTrade with no fills", lambda t: t[t.id != 12], "empty_aggs"),
     ("fill outside every range", lambda t: pd.concat([t, t.iloc[[0]].assign(id=15)]), "uncovered_trades"),
     ("wrong price", lambda t: t.assign(price=np.where(t.id == 13, 60000.2, t.price)), "price_mismatch"),
-    ("wrong time", lambda t: t.assign(ts=np.where(t.id == 10, t.ts + 1, t.ts)), "ts_mismatch"),
+    ("fill before its aggTrade", lambda t: t.assign(ts=np.where(t.id == 10, t.ts - 1, t.ts)), "ts_mismatch"),
     ("wrong side", lambda t: t.assign(is_buyer_maker=np.where(t.id == 14, True, t.is_buyer_maker)), "side_mismatch"),
 ]
 
@@ -158,3 +161,22 @@ def test_bad_prints_warmup_unsorted_untouched():
         flag_bad_prints(df.iloc[::-1], "BTCUSDT")
 
 
+def test_reconcile_trades_accepts_fills_within_the_100ms_window_only():
+    def late(dt):
+        return _trades().assign(ts=lambda t: np.where(t.id == 11, t.ts + dt, t.ts))
+    assert reconcile_trade(_agg(), late(100_000))["ts_mismatch"] == 0
+    assert reconcile_trade(_agg(), late(100_001))["ts_mismatch"] == 1
+
+
+def test_reconcile_trades_measures_ids_missing_inside_ranges():
+    tr = _trades()[lambda t: t.id != 14]
+    agg = _agg().assign(qty=[0.8, 0.2, 0.4])
+    r = reconcile_trade(agg, tr)
+    assert all(r[k] == 0 for k in RECON_KEYS), r
+    assert (r["aggs_with_inner_gaps"], r["inner_missing_ids"]) == (1, 1)
+
+
+def test_check_aggtrades_reports_every_structural_issue():
+    r, _ = check_aggtrades(_agg(), date(2024, 8, 1), "BTCUSDT")
+    missing = [k for k in STRUCTURAL_ISSUES if k not in r]
+    assert not missing, missing
