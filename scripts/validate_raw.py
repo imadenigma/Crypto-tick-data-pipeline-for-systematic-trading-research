@@ -9,7 +9,8 @@ from tqdm import tqdm
 from orderflow.config import DEFAULT_CONFIG, REPO_ROOT, load_config
 from orderflow.data.catalog import DatasetSpec
 from orderflow.data.load import raw_zip, read_zip
-from orderflow.data.validate import check_aggtrades, STRUCTURAL_ISSUES, OUTAGE_GAP_S
+from orderflow.data.validate import check_aggtrades, STRUCTURAL_ISSUES, OUTAGE_GAP_S, reconcile_klines_daily
+from functools import lru_cache
 
 OUT = REPO_ROOT / "reports" / "data_quality"
 ISSUES = ISSUES = STRUCTURAL_ISSUES + ["cross_day_hole"]
@@ -59,6 +60,7 @@ def main() -> None:
         chain["day"] = day.isoformat()
         chain_reports.append(chain)
         r, g = check_aggtrades(df, day, symbol, args.min_gap_s)
+        r.update(reconcile_klines_daily(df.drop_duplicates(), month_klines(cfg.venue, symbol, day.strftime("%Y-%m")), day))
         # Continuity across files: the first fill of today must follow the last fill of yesterday
         r["cross_day_hole"] = 0 if prev_last is None else int(df.first_id.min() - prev_last - 1)
         prev_last = int(df.last_id.max())
@@ -91,7 +93,18 @@ def main() -> None:
           f"longest {worst.max_gap_s:.2f}s on {worst.day}")
     print(f"time gaps > {args.min_gap_s}s: {int((gap.kind == 'time_gap').sum())} | "
           f"id gaps: {int((gap.kind == 'id_gap').sum())}")
+    kl = ["volume_ok", "taker_buy_ok", "high_ok", "low_ok"]
+    print(
+        f"\nklines, daily: {int(rep[kl].all(axis=1).sum())}/{len(rep)} days ok | max |diff| volume {rep.volume_diff_btc.abs().max():.3f} BTC, "
+        f"taker buy {rep.taker_buy_diff_btc.abs().max():.3f} BTC | kline minutes {rep.kline_minutes.min()}-{rep.kline_minutes.max()} | "
+        f"off-book ids inside ranges {rep.ids_minus_fills.sum():,}"
+    )
     print("reports written to", OUT)
+
+
+@lru_cache(maxsize=2)
+def month_klines(venue: str, symbol: str, month: str) -> pd.DataFrame:
+    return read_zip(raw_zip(DatasetSpec("klines", "monthly", "1m"), venue, symbol, month), "klines")
 
 
 if __name__ == "__main__":

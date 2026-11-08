@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from orderflow.data.validate import (RECON_KEYS, STRUCTURAL_ISSUES, check_aggtrades, flag_bad_prints,
-                                     reconcile_klines, reconcile_trade)
+                                     reconcile_klines, reconcile_trade, reconcile_klines_daily)
 
 T0 = 1_722_470_400_000_000   # 2024-08-01 00:00:00 UTC, in microseconds
 MIN = 60_000_000
@@ -180,3 +180,21 @@ def test_check_aggtrades_reports_every_structural_issue():
     r, _ = check_aggtrades(_agg(), date(2024, 8, 1), "BTCUSDT")
     missing = [k for k in STRUCTURAL_ISSUES if k not in r]
     assert not missing, missing
+
+DAY = date(2024, 8, 1)
+EXACT = 1e-9
+
+def test_reconcile_klines_daily_matches_and_ignores_other_days():
+    nextday = _klines().assign(open_time= lambda d: d.open_time + 24 * 60 * 60 * 1_000_000, volume=9.9)
+    r = reconcile_klines_daily(_agg(), pd.concat([_klines(), nextday]), DAY, tol_btc=EXACT)
+    assert r["kline_minutes"] == 2
+    assert all(r[f] for f in ["volume_ok", "taker_buy_ok", "high_ok", "low_ok"]), r
+    assert r["ids_minus_fills"] == 0
+
+def test_reconcile_klines_daily_detects_differences_and_measures_offbook_ids():
+    k = _klines().assign(volume=[1.0, 0.6], high=[60000.0, 60000.2])
+    agg = _agg().assign(last_id=[11, 12, 15])
+    r = reconcile_klines_daily(agg, k, DAY, tol_btc=EXACT)
+    assert round(r["volume_diff_btc"], 9) == 0.1
+    assert not r["volume_ok"] and not r["high_ok"] and r["taker_buy_ok"] and r["low_ok"]
+    assert r["ids_minus_fills"] == 1

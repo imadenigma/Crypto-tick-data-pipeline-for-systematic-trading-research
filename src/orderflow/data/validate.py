@@ -71,6 +71,8 @@ STRUCTURAL_ISSUES = ["unsorted_ids", "dup_ids", "conflicting_dups", "agg_id_jump
                      "missing_fills", "bad_ranges", "ts_backwards", "out_of_day", "nonpositive",
                      "off_tick", "off_step"]
 
+KLINE_DAILY_TOL_BTC = 1.0
+
 def reconcile_trade(agg:pd.DataFrame, trades: pd.DataFrame) -> dict:
     a = agg.sort_values("first_id", kind="stable").reset_index(drop=True)
     t = trades.sort_values("id", kind="stable").reset_index(drop=True)
@@ -230,3 +232,20 @@ def clean_aggtrades(df: pd.DataFrame, symbol: str, tail: pd.DataFrame | None = N
     if stats["rows_in"] != stats["rows_out"] + stats["dropped_exact_dups"]:
         raise CleaningError(f"accounting identity broken: {stats}")
     return out, stats
+
+def reconcile_klines_daily(agg: pd.DataFrame, klines: pd.DataFrame, day: date, tol_btc: float = KLINE_DAILY_TOL_BTC) ->  dict:
+    start, end = day_bounds_us(day)
+    k = klines[(klines.open_time >= start) & (klines.open_time < end)]
+    buy = agg.qty.where(~agg.is_buyer_maker, 0.0)
+    r = {
+        "klines_minutes": len(k),
+        "volume_diff_btc": float(k.volume.sum() - agg.qty.sum()),
+        "taker_buy_diff_btc": float(k.taker_buy_volume.sum() - buy.sum()),
+        "high_ok": bool(agg.price.max() == k.high.max()),
+        "low_ok": bool(agg.price.min() == k.low.min()),
+        "ids_minus_fills": int((agg.last_id - agg.first_id + 1).sum() - k["count"].sum()),
+    }
+    r["volume_ok"] = abs(r["volume_diff_btc"]) <= tol_btc
+    r["taker_buy_ok"] = abs(r["taker_buy_diff_btc"])
+    return r
+

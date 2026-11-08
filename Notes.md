@@ -4,6 +4,11 @@ Order book events: limit orders, market orders and cancellations
 
 over a short time intervals, we found that price changes are mainly driven by the *order flow imbalance* (OFI), defined as the imbalance between supply and demand at the best bid and ask prices, the study below shows a linear relation between OFI and price changes, with a slope inversely proportional to market depth - market’s ability to sustain large order volumes without causing significant price fluctuations - and these results are robust to intraday seasonality effects and stable across other time scales and stocks
 
+# To estimate the Spread we use the Roll estimator:
+$$ s = 2 \sqrt{- \text{Cov}(\Delta P_t, \Delta P_{t-1})} $$
+
+
+
 # Order Book Model: Formulas
 
 ## Price change (definition)
